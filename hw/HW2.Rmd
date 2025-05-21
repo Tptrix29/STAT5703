@@ -1,0 +1,172 @@
+---
+title: "STAT5703 HW2"
+author: "Pei Tian, pt2632"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+install.packages("MASS")  # For confidence ellipse
+install.packages("bbmle") # For MLE estimation
+install.packages("ellipse") # For confidence ellipse
+library(MASS)
+library(bbmle)
+library(ellipse)
+```
+
+
+## HW2
+
+### P2
+```{r hw2-p2}
+# Set parameters
+alpha <- 0.03
+n <- 80
+R <- 100000
+
+# Calculate the critical value c
+c <- qnorm(1 - alpha) / sqrt(n)
+
+# Part (a): Simulation under H0 (mu = 0)
+set.seed(123)  # for reproducibility
+# Generate a matrix of random normals (each row is one sample of size n)
+X0 <- matrix(rnorm(n * R, mean = 0, sd = 1), nrow = R)
+# Calculate sample means for each simulated sample
+sample_means0 <- rowMeans(X0)
+# Determine rejections under H0
+reject_H0 <- sample_means0 > c
+# Estimate Type I error rate (should be approximately alpha)
+alpha_est <- mean(reject_H0)
+cat("Empirical Type I error (should be ~0.03):", alpha_est, "\n")
+
+# Part (b): Simulation under Ha (mu = 1)
+set.seed(456)  # change seed for independent simulation
+X1 <- matrix(rnorm(n * R, mean = 1, sd = 1), nrow = R)
+sample_means1 <- rowMeans(X1)
+reject_H1 <- sample_means1 > c
+# Estimate the power under Ha
+power_est <- mean(reject_H1)
+cat("Empirical power under Ha:", power_est, "\n")
+
+# Theoretical power calculation for verification
+power_theory <- 1 - pnorm((c - 1) * sqrt(n))
+cat("Theoretical power under Ha:", power_theory, "\n")
+```
+
+### P3
+```{r hw2-p3}
+# Parameters
+n <- 4
+alpha <- 0.02
+lambda0 <- 1
+lambda1 <- 4
+
+# (a) & (b) Compute the critical value c under H0: T ~ Gamma(shape=n, rate=lambda0)
+critical_value <- qgamma(alpha, shape = n, rate = lambda0)
+cat("Critical value c =", critical_value, "\n")
+
+# Compute Type II error under H_a: T ~ Gamma(shape=n, rate=lambda1)
+beta <- 1 - pgamma(critical_value, shape = n, rate = lambda1)
+cat("Type II error beta =", beta, "\n")
+
+# (c) Observed sample and test statistic
+observed_sample <- c(1.2, 3, 1.5, 0.3)
+T_obs <- sum(observed_sample)
+cat("Observed test statistic T =", T_obs, "\n")
+
+# p-value under H0: since rejection is for small T, p-value = P(T <= T_obs)
+p_value <- pgamma(T_obs, shape = n, rate = lambda0)
+cat("p-value =", p_value, "\n")
+
+# Decision at significance level alpha
+if (p_value < alpha) {
+  cat("Reject H0\n")
+} else {
+  cat("Fail to reject H0\n")
+}
+
+```
+
+### P4
+```{r hw2-p4}
+# Part (b): 95% CI for mu
+n <- 63
+xbar <- 16.7
+s <- 3.3
+alpha <- 0.05
+
+# t critical value for 95% CI with df = n - 1 = 62
+t_crit <- qt(1 - alpha/2, df = n - 1)
+margin <- t_crit * s / sqrt(n)
+CI_mu <- c(xbar - margin, xbar + margin)
+cat("95% CI for mu:", CI_mu, "\n")
+
+# Part (c): 94% CI for sigma^2
+alpha2 <- 0.06  # 94% confidence -> alpha = 0.06
+df <- n - 1
+
+# chi-square quantiles for df = 62
+lower_chi <- qchisq(1 - alpha2/2, df = df)  # 0.97 quantile
+upper_chi <- qchisq(alpha2/2, df = df)        # 0.03 quantile
+
+CI_sigma2 <- c((df * s^2) / lower_chi, (df * s^2) / upper_chi)
+cat("94% CI for sigma^2:", CI_sigma2, "\n")
+```
+
+### P5
+```{r hw2-p5}
+# Given data
+x <- c(0.34, 0.47, 0.42, 0.23, 0.26)
+
+# Log-likelihood function for Beta distribution
+log_likelihood <- function(alpha, beta) {
+  if (alpha <= 0 | beta <= 0) return(-Inf)  # Ensure positivity
+  sum(log(dbeta(x, alpha, beta)))
+}
+
+# MLE estimation
+mle_fit <- mle2(minuslogl = function(alpha, beta) -log_likelihood(alpha, beta),
+                start = list(alpha = 1, beta = 1))
+
+# Extract MLE estimates
+alpha_hat <- coef(mle_fit)["alpha"]
+beta_hat <- coef(mle_fit)["beta"]
+
+# Compute standard errors and Wald confidence intervals
+se <- sqrt(diag(vcov(mle_fit)))  # Standard errors from covariance matrix
+alpha_ci <- alpha_hat + c(-1.96, 1.96) * se["alpha"]
+beta_ci <- beta_hat + c(-1.96, 1.96) * se["beta"]
+
+# Print results
+cat("MLE Estimates:\n")
+cat("Alpha:", alpha_hat, "\nBeta:", beta_hat, "\n")
+cat("95% Wald CI for Alpha:", alpha_ci, "\n")
+cat("95% Wald CI for Beta:", beta_ci, "\n")
+
+# Confidence ellipse
+cov_matrix <- vcov(mle_fit)  # Covariance matrix of estimates
+confidence_ellipse <- ellipse(cov_matrix, centre = c(alpha_hat, beta_hat), level = 0.95)
+
+# Plot the confidence ellipse
+plot(confidence_ellipse, type = "l", col = "blue", lwd = 2,
+     xlab = expression(alpha), ylab = expression(beta), main = "95% Confidence Ellipse")
+points(alpha_hat, beta_hat, pch = 19, col = "red")  # MLE point
+
+```
+
+```{r}
+
+set.seed(123)
+x <- rnorm(100)
+y <- 0.5 * x + rnorm(100)
+
+cov_matrix <- cov(cbind(x, y))
+center <- c(mean(x), mean(y))
+
+ellipse_points <- ellipse(cov_matrix, centre = center, level = 0.95, npoints = 100)
+plot(x, y, main = "Confidence Ellipse", xlab = "X", ylab = "Y", pch = 16, col = "blue")
+lines(ellipse_points, col = "red", lwd = 2)
+
+
+```

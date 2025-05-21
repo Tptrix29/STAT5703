@@ -1,0 +1,88 @@
+---
+title: "Quiz"
+author: "Pei Tian, pt2632"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Quiz 1
+```{r}
+# Read in the data
+my_data <- read.csv("./data/DS1310.csv")
+
+# Fit the multiple regression model
+model <- lm(y ~ x1 + x2 + x3 + x4, data = my_data)
+
+# Examine the coefficients
+summary(model)
+
+```
+
+
+### Quiz 2
+```{r}
+income <- read.csv("./data/income.csv")
+income$workclass <- as.factor(income$workclass)
+income$education <- as.factor(income$education)
+income$marital.status <- as.factor(income$marital.status)
+income$race <- as.factor(income$race)
+income$gender <- as.factor(income$gender)
+income$income <- as.factor(income$income)
+```
+
+```{r}
+train <- income[1:40000, ]
+test <- income[40001:48842, ]
+```
+
+```{r}
+# Fit logistic regression (GLM with binomial family)
+model <- glm(income ~ age + workclass + education + marital.status + race + gender + hours.per.week, 
+             data = train, family = binomial)
+
+# Print AIC, rounded to nearest integer
+aic_value <- AIC(model)
+cat("AIC (rounded):", round(aic_value), "\n")
+```
+
+```{r}
+summary(model)
+```
+
+```{r}
+# Predict probabilities on the test set using the full model
+pred_probs <- predict(model, newdata = test, type = "response")
+
+# Convert probabilities to binary predictions (1 if > 0.5, else 0)
+pred_labels <- ifelse(pred_probs > 0.5, ">50K", "<=50K")
+
+# Ensure predictions and actual labels are factors with same levels
+pred_labels <- factor(pred_labels, levels = levels(test$income))
+
+# Compute accuracy
+correct <- sum(pred_labels == test$income)
+accuracy <- correct / nrow(test)
+
+# Print accuracy rounded to two decimals
+cat("Accuracy:", round(accuracy, 2), "\n")
+```
+
+
+```{r}
+# Create a confusion matrix
+conf_matrix <- table(Predicted = pred_labels, Actual = test$income)
+
+# Extract True Positives and False Positives
+TP <- conf_matrix[">50K", ">50K"]
+FP <- conf_matrix[">50K", "<=50K"]
+
+# Compute Precision
+precision <- TP / (TP + FP)
+
+# Print precision rounded to 2 decimals
+cat("Precision:", round(precision, 2), "\n")
+```

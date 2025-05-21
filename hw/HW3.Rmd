@@ -1,0 +1,249 @@
+---
+title: "HW3"
+author: "Pei Tian, pt2632"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(MASS)
+# library(ggpairs)
+library(GGally)
+library(car)
+library(lmtest)
+library(leaps)
+```
+
+## HW3
+
+### P1
+```{r p1-a}
+# Read the data (update the file path as necessary)
+data <- read.table("./data/HW3-1.txt", header = TRUE)
+
+# Extract relevant columns: "Sales" and "Profit"
+sales_profit <- data[, c("Sales", "Profit")]
+
+# Compute the sample mean vector and covariance matrix
+x_bar <- colMeans(sales_profit)
+S <- cov(sales_profit)
+
+x_bar
+S
+```
+
+```{r p1-b}
+# Compute Mahalanobis distances
+d_sq <- mahalanobis(sales_profit, center = x_bar, cov = S)
+
+# Compute chi-square critical value for p = 2 at 50% quantile
+chi_sq_50 <- qchisq(0.5, df = 2)
+
+# Determine proportion of observations inside the 50% contour
+prop_inside <- mean(d_sq <= chi_sq_50)
+print(paste("Proportion inside 50% contour:", prop_inside))
+```
+```{r p1-c}
+# Chi-square plot for all three variables
+all_vars <- data[, c("Sales", "Profit", "Assets")] # Update column names
+x_bar_all <- colMeans(all_vars)
+S_all <- cov(all_vars)
+d_sq_all <- mahalanobis(all_vars, center = x_bar_all, cov = S_all)
+
+# Sort squared distances
+d_sq_sorted <- sort(d_sq_all)
+print(d_sq_sorted)
+
+# Compute theoretical chi-square quantiles
+n <- nrow(all_vars)
+chi_sq_quantiles <- qchisq((1:n - 0.5) / n, df = 3)
+
+# Create chi-square plot
+plot(chi_sq_quantiles, d_sq_sorted, main = "Chi-Square Plot",
+     xlab = "Theoretical Quantiles", ylab = "Observed Distances", pch = 19)
+abline(0, 1, col = "red") # 45-degree reference line
+
+```
+
+```{r p2}
+# Load necessary library
+set.seed(123)  # For reproducibility
+
+# Generate synthetic data
+n <- 100
+X <- runif(n, -10, 10)  # Random X values
+Y <- 3 + 2 * X   # True linear relationship with noise
+
+# Split into training (80%) and test (20%) sets
+train_indices <- sample(1:n, size = 0.8 * n)
+test_indices <- setdiff(1:n, train_indices)
+
+X_train <- X[train_indices]
+Y_train <- Y[train_indices]
+X_test <- X[test_indices]
+Y_test <- Y[test_indices]
+
+# Fit linear model
+lm_model <- lm(Y_train ~ X_train)
+
+# Fit cubic model
+cubic_model <- lm(Y_train ~ poly(X_train, 3, raw = TRUE))
+
+# Compute SSE for training data
+sse_train_linear <- sum(residuals(lm_model)^2)
+sse_train_cubic <- sum(residuals(cubic_model)^2)
+
+# Compute SSE for test data
+pred_test_linear <- predict(lm_model, newdata = data.frame(X_train = X_test))
+pred_test_cubic <- predict(cubic_model, newdata = data.frame(X_train = X_test))
+
+sse_test_linear <- sum((Y_test - pred_test_linear)^2)
+sse_test_cubic <- sum((Y_test - pred_test_cubic)^2)
+
+# Print results
+cat("Training SSE (Linear):", sse_train_linear, "\n")
+cat("Training SSE (Cubic):", sse_train_cubic, "\n")
+cat("Test SSE (Linear):", sse_test_linear, "\n")
+cat("Test SSE (Cubic):", sse_test_cubic, "\n")
+
+# Conclusion
+if (sse_train_cubic < sse_train_linear) {
+  cat("Cubic model has lower training SSE (overfitting likely).\n")
+} else {
+  cat("Linear model has lower training SSE.\n")
+}
+
+if (sse_test_cubic > sse_test_linear) {
+  cat("Cubic model has higher test SSE, indicating overfitting.\n")
+} else {
+  cat("Cubic model performs better or similarly on test data.\n")
+}
+
+
+```
+### P3
+```{r p3-a}
+# Load the dataset
+data <- read.table("./data/HW3-3.txt", header = TRUE)  # Ensure the correct file path
+
+# Scatterplot matrix and correlation matrix
+pairs(data)
+cor_matrix <- cor(data)
+print(cor_matrix)
+
+
+```
+```{r p3-b}
+# Fit multiple regression model
+model <- lm(Y ~ X1 + X2 + X3, data = data)
+summary(model)
+```
+```{r p3-c}
+# Check significance of predictors using F-test
+anova_results <- anova(model)
+print(anova_results)
+```
+
+
+```{r p3-d}
+# Confidence intervals for each coefficient (99%)
+conf_intervals <- confint(model, level = 0.99)
+print(conf_intervals)
+```
+
+```{r p3-e}
+# Histogram and Q-Q plot of residuals
+par(mfrow = c(1, 2))
+hist(residuals(model), main = "Histogram of Residuals", xlab = "Residuals")
+qqnorm(residuals(model))
+# qqline(residuals(model))
+
+```
+
+```{r p3-f}
+# Residuals vs. Fitted Values plot
+plot(fitted(model), residuals(model), main = "Residuals vs Fitted", xlab = "Fitted Values", ylab = "Residuals")
+abline(h = 0, col = "red")
+```
+
+
+```{r p3-g}
+# Breusch-Pagan test for homoscedasticity
+bp_test <- bptest(model)
+print(bp_test)
+
+```
+
+
+```{r p3-h}
+# Create second-order terms and interactions
+data$X1_sq <- data$X1^2
+data$X2_sq <- data$X2^2
+data$X3_sq <- data$X3^2
+data$X1_X2 <- data$X1 * data$X2
+data$X1_X3 <- data$X1 * data$X3
+data$X2_X3 <- data$X2 * data$X3
+
+# Create a matrix of predictors (including the original, squared, and interaction terms)
+predictors <- cbind(data$X1, data$X2, data$X3, data$X1_sq, data$X2_sq, data$X3_sq, data$X1_X2, data$X1_X3, data$X2_X3)
+
+# Best subset selection using BIC
+bic_model <- regsubsets(Y ~ X1 + X2 + X3 + X1_sq + X2_sq + X3_sq + X1_X2 + X1_X3 + X2_X3, data = data, method = "exhaustive")
+bic_summary <- summary(bic_model)
+
+
+# Find the best models based on BIC
+bic_best_models <- bic_summary$outmat[which.min(bic_summary$bic), ]
+
+
+# Best subset selection using Adjusted R²
+adj_r2_model <- regsubsets(Y ~ X1 + X2 + X3 + X1_sq + X2_sq + X3_sq + X1_X2 + X1_X3 + X2_X3, data = data, method = "exhaustive")
+adj_r2_summary <- summary(adj_r2_model)
+
+# Find the best models based on Adjusted R²
+adj_r2_best_models <- adj_r2_summary$outmat[which.max(adj_r2_summary$adjr2), ]
+
+bic_best_models
+adj_r2_best_models
+
+
+```
+
+### P4
+```{r p4}
+# Given values for part c
+alpha <- 0.01  # significance level
+n <- 120       # sample size
+SSE <- 45.818  # Sum of squared errors
+SSR <- 3.58    # Sum of squared regression
+
+# 1) Calculate the F-statistic
+F_stat <- SSR / (SSE / (n - 2))
+
+# 2) Find the critical value c for the F-distribution with df1 = 1 and df2 = n - 2
+critical_value <- qf(1 - alpha, df1 = 1, df2 = n - 2)
+
+# 3) Perform the hypothesis test for part c
+reject_null <- F_stat > critical_value
+cat("F-statistic:", F_stat, "\n")
+cat("Critical value:", critical_value, "\n")
+cat("Reject null hypothesis:", reject_null, "\n")
+
+# Part d: Likelihood Ratio Test with Chi-squared approximation
+# The LRT statistic follows a chi-squared distribution with 1 degree of freedom
+# Calculate the chi-squared statistic (LRT statistic)
+LRT_stat <- n * (log(SSR + SSE) - log(SSE))  # simplified formula for LRT
+
+# Find the p-value using the chi-squared distribution with 1 degree of freedom
+p_value_chi_squared <- pchisq(LRT_stat, df = 1, lower.tail = FALSE)
+
+# Output results for part d
+cat("LRT statistic (Chi-squared approximation):", LRT_stat, "\n")
+cat("Chi-squared p-value:", p_value_chi_squared, "\n")
+
+```
+
+
+
+
